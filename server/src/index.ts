@@ -61,7 +61,12 @@ wss.on("connection", (ws: FilterWebSocket) => {
                 return;
             }
 
-            const encrypted = encryptMessage(message);
+            // Create message object with timestamp
+            const msgObj = {
+                text: message,
+                timestamp: new Date().toISOString(),
+            };
+            const encrypted = encryptMessage(JSON.stringify(msgObj));
 
             // Send encrypted message to Hedera
             await new TopicMessageSubmitTransaction()
@@ -69,7 +74,7 @@ wss.on("connection", (ws: FilterWebSocket) => {
                 .setMessage(JSON.stringify(encrypted))
                 .execute(client);
 
-            console.log("📤 Sent to Hedera:", message);
+            console.log(`📤 Sent to Hedera [${msgObj.timestamp}]:`, msgObj.text);
         } catch (err) {
             console.error("❌ Error sending message:", err);
         }
@@ -86,18 +91,19 @@ function subscribeToHederaMessages() {
                 const buf = Buffer.from(message.contents as Uint8Array);
                 const encrypted = JSON.parse(buf.toString("utf8"));
                 const decrypted = decryptMessage(encrypted);
+                const msgObj = JSON.parse(decrypted);
 
                 // Broadcast to clients based on their keywords
                 wss.clients.forEach((client: FilterWebSocket) => {
                     if (client.readyState === WebSocket.OPEN) {
                         // Send if client has no keyword filter or if message contains their keyword
-                        if (!client.keyword || decrypted.toLowerCase().includes(client.keyword.toLowerCase())) {
-                            client.send(decrypted);
+                        if (!client.keyword || msgObj.text.toLowerCase().includes(client.keyword.toLowerCase())) {
+                            client.send(JSON.stringify(msgObj));
                         }
                     }
                 });
 
-                console.log("📥 Received from Hedera:", decrypted);
+                console.log(`📥 Received from Hedera [${msgObj.timestamp}]:`, msgObj.text);
             } catch (err) {
                 console.error("❌ Error processing message:", err);
             }
