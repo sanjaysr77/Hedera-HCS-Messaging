@@ -39,6 +39,10 @@ async function initTopic() {
 initTopic();
 
 // ------------------- WEBSOCKET SERVER -------------------
+
+const MESSAGE_HISTORY_SIZE = 50;
+const messageHistory: { message: string; timestamp: string }[] = [];
+
 const wss = new WebSocketServer({ port: PORT });
 console.log(`✅ WebSocket server running on ws://localhost:${PORT}`);
 
@@ -48,6 +52,14 @@ type FilterWebSocket = WebSocket & { keyword?: string };
 wss.on("connection", (ws: FilterWebSocket) => {
     console.log("👤 New client connected");
     ws.keyword = ""; // Initialize with empty keyword (receives all messages)
+
+    // Send filtered message history to client on connect
+    const filteredHistory = messageHistory.filter(msgObj => {
+        return !ws.keyword || msgObj.message.toLowerCase().includes(ws.keyword.toLowerCase());
+    });
+    filteredHistory.forEach(msgObj => {
+        ws.send(JSON.stringify(msgObj));
+    });
 
     ws.on("message", async (data) => {
         try {
@@ -63,7 +75,7 @@ wss.on("connection", (ws: FilterWebSocket) => {
 
             // Create message object with timestamp
             const msgObj = {
-                text: message,
+                message: message,
                 timestamp: new Date().toISOString(),
             };
             const encrypted = encryptMessage(JSON.stringify(msgObj));
@@ -74,7 +86,7 @@ wss.on("connection", (ws: FilterWebSocket) => {
                 .setMessage(JSON.stringify(encrypted))
                 .execute(client);
 
-            console.log(`📤 Sent to Hedera [${msgObj.timestamp}]:`, msgObj.text);
+            console.log(`📤 Sent to Hedera [${msgObj.timestamp}]:`, msgObj.message);
         } catch (err) {
             console.error("❌ Error sending message:", err);
         }
@@ -93,17 +105,23 @@ function subscribeToHederaMessages() {
                 const decrypted = decryptMessage(encrypted);
                 const msgObj = JSON.parse(decrypted);
 
+                // Store in message history (keep last N)
+                messageHistory.push(msgObj);
+                if (messageHistory.length > MESSAGE_HISTORY_SIZE) {
+                    messageHistory.shift();
+                }
+
                 // Broadcast to clients based on their keywords
                 wss.clients.forEach((client: FilterWebSocket) => {
                     if (client.readyState === WebSocket.OPEN) {
                         // Send if client has no keyword filter or if message contains their keyword
-                        if (!client.keyword || msgObj.text.toLowerCase().includes(client.keyword.toLowerCase())) {
+                        if (!client.keyword || msgObj.message.toLowerCase().includes(client.keyword.toLowerCase())) {
                             client.send(JSON.stringify(msgObj));
                         }
                     }
                 });
 
-                console.log(`📥 Received from Hedera [${msgObj.timestamp}]:`, msgObj.text);
+                console.log(`📥 Received from Hedera [${msgObj.timestamp}]:`, msgObj.message);
             } catch (err) {
                 console.error("❌ Error processing message:", err);
             }
