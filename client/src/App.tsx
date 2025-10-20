@@ -2,12 +2,13 @@
 import { useEffect, useState } from "react";
 import ChatWindow from "./components/ChatWindow";
 import MessageInput from "./components/MessageInput";
-import { addMessageListener, type MsgObj } from "./utils/wsClient";
+import { addMessageListener, type MsgObj, sendFilter } from "./utils/wsClient";
 import { fetchMessages } from "./utils/api";
 
 export default function App() {
 
   const [messages, setMessages] = useState<MsgObj[]>([]);
+  const [keyword, setKeyword] = useState("");
 
   useEffect(() => {
     // Load past messages
@@ -25,8 +26,45 @@ export default function App() {
     );
   }, []);
 
+  // When the search keyword changes, fetch filtered history and inform server
+  useEffect(() => {
+    let cancelled = false;
+    const doFetch = async () => {
+      // small debounce
+      await new Promise((r) => setTimeout(r, 250));
+      if (cancelled) return;
+      try {
+        const msgs = await fetchMessages(keyword);
+        setMessages(msgs);
+        // Tell server to filter broadcasts for this connection
+        sendFilter(keyword);
+      } catch (err) {
+        console.error("Failed to fetch messages:", err);
+      }
+    };
+    doFetch();
+    return () => {
+      cancelled = true;
+    };
+  }, [keyword]);
+
   return (
     <div className="h-screen flex flex-col">
+      <div className="p-2 bg-white border-b flex items-center space-x-2">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+        </svg>
+        <input
+          aria-label="Search messages"
+          className="flex-1 p-2 rounded border"
+          placeholder="Search messages..."
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+        />
+        {keyword && (
+          <button onClick={() => setKeyword("")} className="text-sm text-gray-500 px-2">Clear</button>
+        )}
+      </div>
       <ChatWindow messages={messages} />
       <MessageInput />
     </div>
