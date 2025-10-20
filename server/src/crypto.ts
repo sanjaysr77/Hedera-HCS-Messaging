@@ -1,4 +1,10 @@
+
 import crypto from "crypto";
+import path from "path";
+import dotenv from "dotenv";
+
+// Always load .env from the server root, even if running from dist
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const algorithm = "aes-256-ctr";
 const secretKey = Buffer.from(process.env.SECRET_KEY!, "hex");
@@ -10,7 +16,11 @@ export function encryptMessage(message: string) {
   return { iv: iv.toString("hex"), content: encrypted.toString("hex") };
 }
 
-export function decryptMessage(hash: { iv: string; content: string }) {
+export function decryptMessage(hash?: { iv: string; content: string }) {
+  if (!hash || !hash.iv || !hash.content) {
+    throw new Error("decryptMessage received invalid input: " + JSON.stringify(hash));
+  }
+
   const decipher = crypto.createDecipheriv(
     algorithm,
     secretKey,
@@ -20,5 +30,6 @@ export function decryptMessage(hash: { iv: string; content: string }) {
     decipher.update(Buffer.from(hash.content, "hex")),
     decipher.final(),
   ]);
+
   return decrypted.toString();
 }
