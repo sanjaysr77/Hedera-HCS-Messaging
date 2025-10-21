@@ -3,7 +3,6 @@ import crypto from "crypto";
 import path from "path";
 import dotenv from "dotenv";
 
-// Always load .env from the server root, even if running from dist
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const algorithm = "aes-256-ctr";

@@ -1,23 +1,17 @@
-//Tested using both Hopscotch and Postman. Websockets working fine.
+//Tested using both Hopscotch and Postman. The websockets part is working fine.
 //Try adding MONGO for storing messages if time permits.
 
 import dotenv from "dotenv";
 import express from "express";
 import { encryptMessage, decryptMessage } from "./crypto";
 import { WebSocketServer, WebSocket } from "ws";
-import {
-    Client,
-    TopicCreateTransaction,
-    TopicMessageSubmitTransaction,
-    TopicMessageQuery,
-} from "@hashgraph/sdk";
+import {Client, TopicCreateTransaction, TopicMessageSubmitTransaction, TopicMessageQuery,} from "@hashgraph/sdk";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 
-// Basic CORS middleware to allow requests from the client dev server
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
@@ -29,31 +23,27 @@ app.use((req, res, next) => {
     next();
 });
 
-// ✅ Initialize Hedera Client
 const client = Client.forTestnet();
 client.setOperator(process.env.OPERATOR_ID!, process.env.OPERATOR_KEY!);
 
 let topicId: string | null = null;
-let isSubscribed = false; // ✅ Prevent multiple subscriptions
+let isSubscribed = false; 
 
-// ✅ Create Topic Once
 async function initTopic() {
     try {
         const tx = await new TopicCreateTransaction().execute(client);
         const receipt = await tx.getReceipt(client);
         topicId = receipt.topicId!.toString();
-        console.log("🧭 Topic Created:", topicId);
+        console.log("Topic Created:", topicId);
 
-        // Give time for topic propagation, then subscribe
         await new Promise((r) => setTimeout(r, 2000));
         subscribeToHederaMessages();
     } catch (err) {
-        console.error("❌ Error creating topic:", err);
+        console.error("Error creating topic:", err);
     }
 }
 initTopic();
 
-// ✅ Express API for keyword search
 const messageHistory: { message: string; timestamp: string }[] = [];
 const MESSAGE_HISTORY_SIZE = 50;
 
@@ -65,25 +55,25 @@ app.get("/messages", (req, res) => {
             msgObj.message.toLowerCase().includes(keyword.toLowerCase())
         );
     });
-    res.json(filtered);
+    res.json({
+        topicId: topicId || "Topic not created yet",
+        messages: filtered,
+    });
 });
 
 app.listen(PORT + 1, () => {
-    console.log(`🌐 HTTP Running on http://localhost:${PORT + 1}/messages`);
+    console.log(`HTTP Running on http://localhost:${PORT + 1}/messages`);
 });
 
-// ✅ WebSocket Server Setup
 const wss = new WebSocketServer({ port: PORT });
-console.log(`✅ WebSocket server running on ws://localhost:${PORT}`);
+console.log(`WebSocket server running on ws://localhost:${PORT}`);
 
 type FilterWebSocket = WebSocket & { keyword?: string };
 
-// ✅ Connection Handler
 wss.on("connection", (ws: FilterWebSocket) => {
-    console.log("👤 New client connected");
+    console.log("New client connected");
     ws.keyword = "";
 
-    // Send message history (filtered)
     const filteredHistory = messageHistory.filter((msgObj) => {
         return (
             !ws.keyword ||
@@ -92,12 +82,10 @@ wss.on("connection", (ws: FilterWebSocket) => {
     });
     filteredHistory.forEach((msgObj) => ws.send(JSON.stringify(msgObj)));
 
-    // ✅ Handle messages from client
     ws.on("message", async (data) => {
         try {
             const message = data.toString().trim();
 
-            // ✅ Filter Command
             if (message.startsWith("/filter")) {
                 const newKeyword = message.slice(8).trim();
                 ws.keyword = newKeyword;
@@ -115,7 +103,6 @@ wss.on("connection", (ws: FilterWebSocket) => {
                 return;
             }
 
-            // ✅ Encrypt and Send to Hedera
             const msgObj = {
                 message,
                 timestamp: new Date().toISOString(),
@@ -128,23 +115,22 @@ wss.on("connection", (ws: FilterWebSocket) => {
                 .setMessage(JSON.stringify(encrypted))
                 .execute(client);
 
-            console.log(`📤 Sent to Hedera [${msgObj.timestamp}]:`, msgObj.message);
+            console.log(`Sent to Hedera [${msgObj.timestamp}]:`, msgObj.message);
         } catch (err) {
-            console.error("❌ Error sending message:", err);
+            console.error("Error sending message:", err);
         }
     });
 
     ws.on("close", () => {
-        console.log("👋 Client disconnected");
+        console.log("Client disconnected");
     });
 });
 
-// ✅ Subscribe Once to Hedera Messages
 function subscribeToHederaMessages() {
-    if (isSubscribed || !topicId) return; // 🚫 Prevent multiple subscriptions
+    if (isSubscribed || !topicId) return;
     isSubscribed = true;
 
-    console.log("🔗 Subscribing to Hedera topic messages...");
+    console.log("Subscribing to Hedera topic messages...");
 
     new TopicMessageQuery()
         .setTopicId(topicId)
@@ -162,7 +148,6 @@ function subscribeToHederaMessages() {
                     messageHistory.shift();
                 }
 
-                // ✅ Broadcast only once to all active clients
                 wss.clients.forEach((client: FilterWebSocket) => {
                     if (client.readyState === WebSocket.OPEN) {
                         if (
@@ -176,9 +161,9 @@ function subscribeToHederaMessages() {
                     }
                 });
 
-                console.log(`📥 Received [${msgObj.timestamp}]:`, msgObj.message);
+                console.log(`Received [${msgObj.timestamp}]:`, msgObj.message);
             } catch (err) {
-                console.error("❌ Error processing message:", err);
+                console.error("Error processing message:", err);
             }
         });
 }
