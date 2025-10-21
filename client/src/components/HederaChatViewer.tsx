@@ -16,7 +16,6 @@ export default function HederaChatViewer() {
         ws.onmessage = (event) => {
             const msgObj: MsgObj = JSON.parse(event.data);
             setMessages((prev) => {
-                // Deduplicate by message+timestamp
                 if (prev.some((m) => m.message === msgObj.message && m.timestamp === msgObj.timestamp)) {
                     return prev;
                 }

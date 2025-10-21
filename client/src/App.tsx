@@ -3,21 +3,22 @@ import { useEffect, useState } from "react";
 import ChatWindow from "./components/ChatWindow";
 import MessageInput from "./components/MessageInput";
 import { addMessageListener, type MsgObj, sendFilter } from "./utils/wsClient";
-import { fetchMessages } from "./utils/api";
+import { fetchMessagesWithMeta } from "./utils/api";
 
 export default function App() {
 
   const [messages, setMessages] = useState<MsgObj[]>([]);
   const [keyword, setKeyword] = useState("");
+  const [topicId, setTopicId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    // Load past messages
-    fetchMessages().then((msgs) => setMessages(msgs));
+    fetchMessagesWithMeta().then(({ topicId: tid, messages: msgs }) => {
+      setTopicId(tid);
+      setMessages(msgs);
+    });
 
-    // Listen for new messages, but deduplicate
     addMessageListener((msg) =>
       setMessages((prev) => {
-        // Check for duplicate by message+timestamp
         if (prev.some((m) => m.message === msg.message && m.timestamp === msg.timestamp)) {
           return prev;
         }
@@ -26,17 +27,15 @@ export default function App() {
     );
   }, []);
 
-  // When the search keyword changes, fetch filtered history and inform server
   useEffect(() => {
     let cancelled = false;
     const doFetch = async () => {
-      // small debounce
       await new Promise((r) => setTimeout(r, 250));
       if (cancelled) return;
       try {
-        const msgs = await fetchMessages(keyword);
-        setMessages(msgs);
-        // Tell server to filter broadcasts for this connection
+        const resp = await fetchMessagesWithMeta(keyword);
+        setTopicId(resp.topicId);
+        setMessages(resp.messages);
         sendFilter(keyword);
       } catch (err) {
         console.error("Failed to fetch messages:", err);
@@ -64,6 +63,7 @@ export default function App() {
         {keyword && (
           <button onClick={() => setKeyword("")} className="text-sm text-gray-500 px-2">Clear</button>
         )}
+        <div className="text-xs text-gray-400 ml-2">Topic: {topicId ?? "(not created yet)"}</div>
       </div>
       <ChatWindow messages={messages} />
       <MessageInput />
