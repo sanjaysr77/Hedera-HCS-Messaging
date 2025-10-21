@@ -1,6 +1,10 @@
 import { type MsgObj } from "./wsClient";
 
-const API_URL = "http://localhost:8081/messages";
+// Use Vite environment variable for the backend base URL.
+// Set VITE_API_BASE_URL in `client/.env` or in Vercel as an environment variable.
+// Example: VITE_API_BASE_URL=http://localhost:8081
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
+const API_URL = `${BASE_URL.replace(/\/$/, "")}/messages`;
 
 export async function fetchMessages(keyword = ""): Promise<MsgObj[]> {
   const res = await fetch(`${API_URL}?keyword=${keyword}`);
