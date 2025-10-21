@@ -71,7 +71,7 @@ export default function App() {
                 </svg>
                 <input
                   aria-label="Search messages"
-                  className="flex-1 p-2 rounded border"
+                  className="flex-1 p-2 rounded-3xl border border-gray-300"
                   placeholder="Search messages..."
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
@@ -84,7 +84,7 @@ export default function App() {
                     Clear
                   </button>
                 )}
-                <div className="text-xs text-gray-400 ml-2">
+                <div className="text-l text-gray-400 ml-2">
                   Topic: {topicId ?? "(not created yet)"}
                 </div>
               </div>
