@@ -1,6 +1,20 @@
 export type MsgObj = { message: string; timestamp: string };
 
-const WS_URL = "ws://localhost:8080";
+// Derive WebSocket URL from Vite API base URL. If VITE_API_BASE_URL is set to
+// https://api.example.com then the WS URL will be wss://api.example.com (same host).
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
+function toWsUrl(base: string) {
+  try {
+    const u = new URL(base);
+    const protocol = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${u.host.replace(/:\d+$/, ":8080")}`; // default ws port used by server
+  } catch (err) {
+    // fallback
+    return "ws://localhost:8080";
+  }
+}
+
+const WS_URL = toWsUrl(BASE_URL);
 const ws = new WebSocket(WS_URL);
 
 const listeners: ((msg: MsgObj) => void)[] = [];

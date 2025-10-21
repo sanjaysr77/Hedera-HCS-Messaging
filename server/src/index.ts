@@ -3,31 +3,45 @@
 
 import dotenv from "dotenv";
 import express from "express";
+import cors from "cors";
 import { encryptMessage, decryptMessage } from "./crypto";
 import { WebSocketServer, WebSocket } from "ws";
-import {Client, TopicCreateTransaction, TopicMessageSubmitTransaction, TopicMessageQuery,} from "@hashgraph/sdk";
+import { Client, TopicCreateTransaction, TopicMessageSubmitTransaction, TopicMessageQuery, } from "@hashgraph/sdk";
+import http from "http";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
+// PORT will be provided by Render in production. Use 8080 as a fallback.
+const PORT = process.env.PORT ? Number(process.env.PORT) : Number(process.env.PORT || 8080);
 
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    );
-    if (req.method === "OPTIONS") return res.sendStatus(200);
-    next();
-});
+// Configure CORS to allow only the frontend origin in production. The frontend URL
+// should be set in server/.env (FRONTEND_URL) or via Render environment variables.
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like server-to-server or curl)
+            if (!origin) return callback(null, true);
+            if (origin === FRONTEND_URL) return callback(null, true);
+            // Allow localhost dev origins (optional)
+            if (origin.startsWith("http://localhost")) return callback(null, true);
+            return callback(new Error("CORS policy: origin not allowed"));
+        },
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
+    })
+);
+
+// Parse JSON bodies if you add endpoints accepting JSON in future
+app.use(express.json());
 
 const client = Client.forTestnet();
 client.setOperator(process.env.OPERATOR_ID!, process.env.OPERATOR_KEY!);
 
 let topicId: string | null = null;
-let isSubscribed = false; 
+let isSubscribed = false;
 
 async function initTopic() {
     try {
@@ -61,12 +75,17 @@ app.get("/messages", (req, res) => {
     });
 });
 
-app.listen(PORT + 1, () => {
-    console.log(`HTTP Running on http://localhost:${PORT + 1}/messages`);
+// Create a single HTTP server and attach the WebSocket server to it. This plays nicer
+// with hosting providers that expect a single port (Render provides PORT env var).
+const server = http.createServer(app);
+
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Messages endpoint: http://localhost:${PORT}/messages`);
 });
 
-const wss = new WebSocketServer({ port: PORT });
-console.log(`WebSocket server running on ws://localhost:${PORT}`);
+const wss = new WebSocketServer({ server });
+console.log(`WebSocket server attached to same HTTP server`);
 
 type FilterWebSocket = WebSocket & { keyword?: string };
 
