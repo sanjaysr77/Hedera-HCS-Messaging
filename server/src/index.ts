@@ -15,18 +15,15 @@ const app = express();
 // PORT will be provided by Render in production. Use 8080 as a fallback.
 const PORT = process.env.PORT ? Number(process.env.PORT) : Number(process.env.PORT || 8080);
 
-// Configure CORS to allow only the frontend origin in production. The frontend URL
-// should be set in server/.env (FRONTEND_URL) or via Render environment variables.
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+// Configure CORS to allow specified origins
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173").split(",");
 
 app.use(
     cors({
         origin: (origin, callback) => {
             // Allow requests with no origin (like server-to-server or curl)
             if (!origin) return callback(null, true);
-            if (origin === FRONTEND_URL) return callback(null, true);
-            // Allow localhost dev origins (optional)
-            if (origin.startsWith("http://localhost")) return callback(null, true);
+            if (allowedOrigins.includes(origin)) return callback(null, true);
             return callback(new Error("CORS policy: origin not allowed"));
         },
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
